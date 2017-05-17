@@ -8,6 +8,12 @@
 #include <math.h>
 #include "box.h"
 
+#ifdef OPENCV
+#include "opencv2/highgui/highgui_c.h"
+#include "opencv2/imgproc/imgproc_c.h"
+#endif
+
+
 typedef struct {
     int h;
     int w;
@@ -15,14 +21,22 @@ typedef struct {
     float *data;
 } image;
 
+image ipl_to_image(IplImage* src);
+void DrawLine(image pic, int x1, int y1, int x2, int y2, float r, float g, float b);
+image DrawLines_cv(image pic, int *x, int *y, int n, float width, float r, float g, float b);
+void SetColor(image pic, float value);
 float get_color(int c, int x, int max);
 void flip_image(image a);
 void draw_box(image a, int x1, int y1, int x2, int y2, float r, float g, float b);
 void draw_box_width(image a, int x1, int y1, int x2, int y2, int w, float r, float g, float b);
+image draw_box5(image a, box2 box_in, float width, float r, float g, float b);
+image draw_box7(image a, box3 box_in, float width, float r, float g, float b);
 void draw_bbox(image a, box bbox, int w, float r, float g, float b);
 void draw_label(image a, int r, int c, image label, const float *rgb);
-void write_label(image a, int r, int c, image *characters, char *string, float *rgb);
+//void write_label(image a, int r, int c, image *characters, char *string, float *rgb);
 void draw_detections(image im, int num, float thresh, box *boxes, float **probs, char **names, image **labels, int classes);
+void draw_detections5(image *im, int num, float thresh, box2 *boxes, float **probs, char **names, image **alphabet, int classes);
+void draw_detections7(image *im, int num, float thresh, box3 *boxes, float **probs, char **names, image **alphabet, int classes);
 image image_distance(image a, image b);
 void scale_image(image m, float s);
 image crop_image(image im, int dx, int dy, int w, int h);
@@ -55,6 +69,7 @@ image collapse_images_horz(image *ims, int n);
 image collapse_images_vert(image *ims, int n);
 
 void show_image(image p, const char *name);
+void show_image_cv(image p, const char *name);
 void show_image_normalized(image im, const char *name);
 void save_image_png(image im, const char *name);
 void save_image(image p, const char *name);

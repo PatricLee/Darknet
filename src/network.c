@@ -241,6 +241,25 @@ float train_network_datum(network net, float *x, float *y)
     if(((*net.seen)/net.batch)%net.subdivisions == 0) update_network(net);
     return error;
 }
+float train_network_datum2(network net, float *x, float *y)
+{
+#ifdef GPU
+	if (gpu_index >= 0) return train_network_datum_gpu(net, x, y);
+#endif
+	network_state state;
+	*net.seen += net.batch;
+	state.index = 0;
+	state.net = net;
+	state.input = x;
+	state.delta = 0;
+	state.truth = y;
+	state.train = 1;
+	forward_network(net, state);
+	backward_network(net, state);
+	float error = get_network_cost(net);
+	if (((*net.seen) / net.batch) % net.subdivisions == 0) update_network(net);
+	return error;
+}
 
 float train_network_sgd(network net, data d, int n)
 {
@@ -278,6 +297,25 @@ float train_network(network net, data d)
     free(X);
     free(y);
     return (float)sum/(n*batch);
+}
+float train_network_cronus(network net, data d)
+{
+	assert(d.X.rows % net.batch == 0);
+	int batch = net.batch;
+	int n = d.X.rows / batch;
+	float *X = calloc(batch*d.X.cols, sizeof(float));
+	float *y = calloc(batch*d.y.cols, sizeof(float));
+
+	int i;
+	float sum = 0;
+	for (i = 0; i < n; ++i) {
+		get_next_batch(d, batch, i*batch, X, y);
+		float err = train_network_datum2(net, X, y);
+		sum += err;
+	}
+	free(X);
+	free(y);
+	return (float)sum / (n*batch);
 }
 
 

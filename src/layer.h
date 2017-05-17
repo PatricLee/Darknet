@@ -10,6 +10,20 @@ struct network_state;
 struct layer;
 typedef struct layer layer;
 
+typedef struct {
+	float x, y, w, h;//normalized to (0,1)
+}roi_box;
+typedef struct {
+	roi_box *roibox;//length = batch*max_boxes
+	int *n;//length = batch, actual roi number in each batch
+	float *prob;//batch*max_boxes, probs from main net
+				//float *loss;
+}roi_boxes;
+typedef struct {
+	float x, y, z, w, h, l, rz;//l & h in lidar coord, differ from main net output
+	float *prob;//prob for each class
+}combined_label;
+
 typedef enum {
     CONVOLUTIONAL,
     DECONVOLUTIONAL,
@@ -34,7 +48,10 @@ typedef enum {
     XNOR,
     REGION,
     REORG,
-    BLANK
+    BLANK,
+	REGION5,
+	REGION7,
+	ROIPOOL
 } LAYER_TYPE;
 
 typedef enum{
@@ -261,6 +278,8 @@ struct layer{
     cudnnConvolutionBwdFilterAlgo_t bf_algo;
     #endif
     #endif
+	
+	roi_boxes *roiboxes;
 };
 
 void free_layer(layer);

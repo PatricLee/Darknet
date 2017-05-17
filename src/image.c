@@ -10,15 +10,58 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-#ifdef OPENCV
-#include "opencv2/highgui/highgui_c.h"
-#include "opencv2/imgproc/imgproc_c.h"
-#endif
-
-
 int windows = 0;
 
 float colors[6][3] = { {1,0,1}, {0,0,1},{0,1,1},{0,1,0},{1,1,0},{1,0,0} };
+
+//check if in bound
+void DrawLine(image pic, int x1, int y1, int x2, int y2, float r, float g, float b) {
+	int i, j;
+	if (pic.c != 3)return;
+	for (i = x1; i <= x2; i++) {
+		j = (int)((float)(i - x1) / (float)(x2 - x1)*(float)(y2 - y1)) + y1;
+		if (i >= 0 && i < pic.w && j >= 0 && j < pic.h) {
+			pic.data[i + j*pic.w + 0 * pic.w*pic.h] = r;
+			pic.data[i + j*pic.w + 1 * pic.w*pic.h] = g;
+			pic.data[i + j*pic.w + 2 * pic.w*pic.h] = b;
+		}
+	}
+}
+
+image DrawLines_cv(image pic, int *x, int *y, int n, float width, float r, float g, float b) {
+	if (pic.c != 3)return;
+	int i, j, k;
+	constrain_image(pic);
+	rgbgr_image(pic);
+	
+	IplImage *disp = cvCreateImage(cvSize(pic.w, pic.h), IPL_DEPTH_8U, pic.c);
+	int step = disp->widthStep;
+	
+	for (j = 0; j < pic.h; ++j) {
+		for (i = 0; i < pic.w; ++i) {
+			for (k = 0; k < pic.c; ++k) {
+				disp->imageData[j*step + i*pic.c + k] = (unsigned char)(get_pixel(pic, i, j, k) * 255);
+			}
+		}
+	}
+	free_image(pic);
+	
+	for (i = 0; i < n; i++) {
+		cvDrawLine(disp, cvPoint(x[i], y[i]), cvPoint(x[(i + 1) % n], y[(i + 1) % n]), CV_RGB(r * 255, b * 255, g * 255), width, 8, 0);
+	}
+	
+	image pic_out = ipl_to_image(disp);
+	cvReleaseImage(&disp);
+	rgbgr_image(pic_out);
+	return pic_out;
+}
+
+void SetColor(image pic, float value) {
+	int i;
+	for (i = 0; i < (pic.w*pic.h*pic.c); i++) {
+		pic.data[i] = value;
+	}
+}
 
 float get_color(int c, int x, int max)
 {
@@ -139,6 +182,88 @@ void draw_box(image a, int x1, int y1, int x2, int y2, float r, float g, float b
         a.data[x2 + i*a.w + 2*a.w*a.h] = b;
     }
 }
+image draw_box5(image a, box2 box_in, float width, float r, float g, float b)
+{
+	//normalize_image(a);
+	int x[4], y[4];
+
+	float xshift = box_in.x;
+	float yshift = box_in.y;
+	float w = box_in.w;
+	float h = box_in.h;
+	float rz = box_in.rz;
+	x[0] = (cosf(rz)*(-w / 2) + sinf(rz)*(-h / 2) + xshift)*a.w;
+	y[0] = (-sinf(rz)*(-w / 2) + cosf(rz)*(-h / 2) + yshift)*a.h;
+	x[1] = (cosf(rz)*(w / 2) + sinf(rz)*(-h / 2) + xshift)*a.w;
+	y[1] = (-sinf(rz)*(w / 2) + cosf(rz)*(-h / 2) + yshift)*a.h;
+	x[2] = (cosf(rz)*(w / 2) + sinf(rz)*(h / 2) + xshift)*a.w;
+	y[2] = (-sinf(rz)*(w / 2) + cosf(rz)*(h / 2) + yshift)*a.h;
+	x[3] = (cosf(rz)*(-w / 2) + sinf(rz)*(h / 2) + xshift)*a.w;
+	y[3] = (-sinf(rz)*(-w / 2) + cosf(rz)*(h / 2) + yshift)*a.h;
+	image pic_out = DrawLines_cv(a, x, y, 4, 1, r, g, b);
+	return pic_out;
+	/*for (int i = 0; i < 4; i++) {
+		DrawLine(a, x[i], y[i], x[(i + 1) % 4], y[(i + 1) % 4], r, g, b);
+	}*/
+	/*int x1 = (box_in.x - box_in.w / 2.)*a.w;
+	int x2 = (box_in.x + box_in.w / 2.)*a.w;
+	int y1 = (box_in.y - box_in.h / 2.)*a.h;
+	int y2 = (box_in.y + box_in.h / 2.)*a.h;
+	float rz = box_in.rz;
+
+	int i;
+	if (x1 < 0) x1 = 0;
+	if (x1 >= a.w) x1 = a.w - 1;
+	if (x2 < 0) x2 = 0;
+	if (x2 >= a.w) x2 = a.w - 1;
+
+	if (y1 < 0) y1 = 0;
+	if (y1 >= a.h) y1 = a.h - 1;
+	if (y2 < 0) y2 = 0;
+	if (y2 >= a.h) y2 = a.h - 1;
+
+	for (i = 0; i <= (int)(box_in.w*a.w); ++i) {
+		a.data[i + y1*a.w + 0 * a.w*a.h] = r;
+		a.data[i + y2*a.w + 0 * a.w*a.h] = r;
+
+		a.data[i + y1*a.w + 1 * a.w*a.h] = g;
+		a.data[i + y2*a.w + 1 * a.w*a.h] = g;
+
+		a.data[i + y1*a.w + 2 * a.w*a.h] = b;
+		a.data[i + y2*a.w + 2 * a.w*a.h] = b;
+	}
+	for (i = y1; i <= y2; ++i) {
+		a.data[x1 + i*a.w + 0 * a.w*a.h] = r;
+		a.data[x2 + i*a.w + 0 * a.w*a.h] = r;
+
+		a.data[x1 + i*a.w + 1 * a.w*a.h] = g;
+		a.data[x2 + i*a.w + 1 * a.w*a.h] = g;
+
+		a.data[x1 + i*a.w + 2 * a.w*a.h] = b;
+		a.data[x2 + i*a.w + 2 * a.w*a.h] = b;
+	}*/
+}
+image draw_box7(image a, box3 box_in, float width, float r, float g, float b)
+{
+	//normalize_image(a);
+	int x[4], y[4];
+
+	float xshift = box_in.x;
+	float yshift = box_in.y;
+	float w = box_in.w;
+	float h = box_in.h;
+	float rz = box_in.rz;
+	x[0] = (cosf(rz)*(-w / 2) + sinf(rz)*(-h / 2) + xshift)*a.w;
+	y[0] = (-sinf(rz)*(-w / 2) + cosf(rz)*(-h / 2) + yshift)*a.h;
+	x[1] = (cosf(rz)*(w / 2) + sinf(rz)*(-h / 2) + xshift)*a.w;
+	y[1] = (-sinf(rz)*(w / 2) + cosf(rz)*(-h / 2) + yshift)*a.h;
+	x[2] = (cosf(rz)*(w / 2) + sinf(rz)*(h / 2) + xshift)*a.w;
+	y[2] = (-sinf(rz)*(w / 2) + cosf(rz)*(h / 2) + yshift)*a.h;
+	x[3] = (cosf(rz)*(-w / 2) + sinf(rz)*(h / 2) + xshift)*a.w;
+	y[3] = (-sinf(rz)*(-w / 2) + cosf(rz)*(h / 2) + yshift)*a.h;
+	image pic_out = DrawLines_cv(a, x, y, 4, 1, r, g, b);
+	return pic_out;
+}
 
 void draw_box_width(image a, int x1, int y1, int x2, int y2, int w, float r, float g, float b)
 {
@@ -146,6 +271,13 @@ void draw_box_width(image a, int x1, int y1, int x2, int y2, int w, float r, flo
     for(i = 0; i < w; ++i){
         draw_box(a, x1+i, y1+i, x2-i, y2-i, r, g, b);
     }
+}
+void draw_box_width5(image a, int x1, int y1, int x2, int y2, int w, float r, float g, float b)
+{
+	int i;
+	for (i = 0; i < w; ++i) {
+		draw_box(a, x1 + i, y1 + i, x2 - i, y2 - i, r, g, b);
+	}
 }
 
 void draw_bbox(image a, box bbox, int w, float r, float g, float b)
@@ -219,11 +351,130 @@ void draw_detections(image im, int num, float thresh, box *boxes, float **probs,
 
             draw_box_width(im, left, top, right, bot, width, red, green, blue);
             if (alphabet) {
-                image label = get_label(alphabet, names[class], (im.h*.03)/10);
+				image label = get_label(alphabet, names[class], (im.h*.03) / 16);
                 draw_label(im, top + width, left, label, rgb);
+				//draws probability after class name
+				char prob_string[10];
+				sprintf_s(prob_string, 10, "%.1f", prob*100);
+				image label_prob = get_label(alphabet, prob_string, (im.h*.03) / 16);
+				draw_label(im, top + width, left + label.w, label_prob, rgb);
             }
         }
     }
+}
+void draw_detections5(image *im, int num, float thresh, box2 *boxes, float **probs, char **names, image **alphabet, int classes)
+{
+	int i;
+
+	for (i = 0; i < num; ++i) {
+		int class = max_index(probs[i], classes);
+		float prob = probs[i][class];
+		if (prob > thresh) {
+
+			int width = im->h * .012;
+
+			if (0) {
+				width = pow(prob, 1. / 2.) * 10 + 1;
+				alphabet = 0;
+			}
+
+			
+			int offset = class * 123457 % classes;
+			float red = get_color(2, offset, classes);
+			float green = get_color(1, offset, classes);
+			float blue = get_color(0, offset, classes);
+			float rgb[3];
+
+			//width = prob*20+2;
+
+			rgb[0] = red;
+			rgb[1] = green;
+			rgb[2] = blue;
+			box2 b = boxes[i];
+			
+			printf("%s: %.0f%%,@(%.2f,%.2f),size(%.2f,%.2f),rz(%.2f)\n", names[class], prob * 100, b.x, b.y, b.w, b.h, b.rz);
+
+			int left = (b.x - b.w / 2.)*im->w;
+			int right = (b.x + b.w / 2.)*im->w;
+			int top = (b.y - b.h / 2.)*im->h;
+			int bot = (b.y + b.h / 2.)*im->h;
+
+			if (left < 0) left = 0;
+			if (right > im->w - 1) right = im->w - 1;
+			if (top < 0) top = 0;
+			if (bot > im->h - 1) bot = im->h - 1;
+
+			image pic = draw_box5(*im, b, width, red, green, blue);
+			*im = copy_image(pic);
+			/*if (alphabet) {
+				image label = get_label(alphabet, names[class], (im.h*.03) / 16);
+				draw_label(im, top + width, left, label, rgb);
+				//draws probability after class name
+				char prob_string[10];
+				sprintf_s(prob_string, 10, "%.1f", prob * 100);
+				image label_prob = get_label(alphabet, prob_string, (im.h*.03) / 16);
+				draw_label(im, top + width, left + label.w, label_prob, rgb);
+			}*/
+			free_image(pic);
+		}
+	}
+}
+void draw_detections7(image *im, int num, float thresh, box3 *boxes, float **probs, char **names, image **alphabet, int classes)
+{
+	int i;
+
+	for (i = 0; i < num; ++i) {
+		int class = max_index(probs[i], classes);
+		float prob = probs[i][class];
+		if (prob > thresh) {
+
+			int width = im->h * .012;
+
+			if (0) {
+				width = pow(prob, 1. / 2.) * 10 + 1;
+				alphabet = 0;
+			}
+
+			
+			int offset = class * 123457 % classes;
+			float red = get_color(2, offset, classes);
+			float green = get_color(1, offset, classes);
+			float blue = get_color(0, offset, classes);
+			float rgb[3];
+
+			//width = prob*20+2;
+
+			rgb[0] = red;
+			rgb[1] = green;
+			rgb[2] = blue;
+			box3 b = boxes[i];
+			
+			printf("%s: %.0f%%,@(%.2f,%.2f),size(%.2f,%.2f),rz(%.2f)\n", names[class], prob * 100, b.x, b.y, b.w, b.h, b.rz);
+
+			int left = (b.x - b.w / 2.)*im->w;
+			int right = (b.x + b.w / 2.)*im->w;
+			int top = (b.y - b.h / 2.)*im->h;
+			int bot = (b.y + b.h / 2.)*im->h;
+
+			if (left < 0) left = 0;
+			if (right > im->w - 1) right = im->w - 1;
+			if (top < 0) top = 0;
+			if (bot > im->h - 1) bot = im->h - 1;
+
+			image pic = draw_box7(*im, b, width, red, green, blue);
+			*im = copy_image(pic);
+			/*if (alphabet) {
+				image label = get_label(alphabet, names[class], (im.h*.03) / 16);
+				draw_label(im, top + width, left, label, rgb);
+				//draws probability after class name
+				char prob_string[10];
+				sprintf_s(prob_string, 10, "%.1f", prob * 100);
+				image label_prob = get_label(alphabet, prob_string, (im.h*.03) / 16);
+				draw_label(im, top + width, left + label.w, label_prob, rgb);
+			}*/
+			free_image(pic);
+		}
+	}
 }
 
 void transpose_image(image im)
@@ -413,7 +664,7 @@ void show_image_cv(image p, const char *name)
 
     IplImage *disp = cvCreateImage(cvSize(p.w,p.h), IPL_DEPTH_8U, p.c);
     int step = disp->widthStep;
-    cvNamedWindow(buff, CV_WINDOW_NORMAL); 
+    cvNamedWindow(buff, CV_WINDOW_AUTOSIZE); 
     //cvMoveWindow(buff, 100*(windows%10) + 200*(windows/10), 100*(windows%10));
     ++windows;
     for(y = 0; y < p.h; ++y){

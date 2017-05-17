@@ -10,6 +10,7 @@
 #include "blas.h"
 #include "connected_layer.h"
 #include "convolutional_layer.h"
+#include "deconvolutional_layer.h"
 #include "cost_layer.h"
 #include "crnn_layer.h"
 #include "crop_layer.h"
@@ -29,6 +30,7 @@
 #include "shortcut_layer.h"
 #include "softmax_layer.h"
 #include "utils.h"
+#include "roipool_layer.h"
 
 typedef struct{
     char *type;
@@ -36,6 +38,8 @@ typedef struct{
 }section;
 
 list *read_cfg(char *filename);
+
+extern roi_boxes *roiboxes;
 
 LAYER_TYPE string_to_layer_type(char * type)
 {
@@ -68,6 +72,9 @@ LAYER_TYPE string_to_layer_type(char * type)
     if (strcmp(type, "[soft]")==0
             || strcmp(type, "[softmax]")==0) return SOFTMAX;
     if (strcmp(type, "[route]")==0) return ROUTE;
+	if (strcmp(type, "[region5]") == 0) return REGION5;
+	if (strcmp(type, "[region7]") == 0) return REGION7;
+	if (strcmp(type, "[deconvolutional]") == 0) return DECONVOLUTIONAL;
     return BLANK;
 }
 
@@ -167,6 +174,36 @@ convolutional_layer parse_convolutional(list *options, size_params params)
     }
 
     return layer;
+}
+deconvolutional_layer parse_deconvolutional(list *options, size_params params)
+{
+	int n = option_find_int(options, "filters", 1);
+	int size = option_find_int(options, "size", 1);
+	int stride = option_find_int(options, "stride", 1);
+
+	char *activation_s = option_find_str(options, "activation", "logistic");
+	ACTIVATION activation = get_activation(activation_s);
+
+	int batch, h, w, c;
+	h = params.h;
+	w = params.w;
+	c = params.c;
+	batch = params.batch;
+	/*if (!(h && w && c)) error("Layer before convolutional layer must output image.");
+	int batch_normalize = option_find_int_quiet(options, "batch_normalize", 0);
+	int binary = option_find_int_quiet(options, "binary", 0);
+	int xnor = option_find_int_quiet(options, "xnor", 0);*/
+
+	deconvolutional_layer layer = make_deconvolutional_layer(batch, h, w, c, n, size, stride, activation);
+	layer.flipped = option_find_int_quiet(options, "flipped", 0);
+	layer.dot = option_find_float_quiet(options, "dot", 0);
+	if (params.net.adam) {
+		layer.B1 = params.net.B1;
+		layer.B2 = params.net.B2;
+		layer.eps = params.net.eps;
+	}
+
+	return layer;
 }
 
 layer parse_crnn(list *options, size_params params)
@@ -281,6 +318,115 @@ layer parse_region(list *options, size_params params)
     }
     return l;
 }
+layer parse_region5(list *options, size_params params)
+{
+	int coords = option_find_int(options, "coords", 4);
+	int classes = option_find_int(options, "classes", 20);
+	int num = option_find_int(options, "num", 1);
+
+	layer l = make_region_layer5(params.batch, params.w, params.h, num, classes, coords);
+	assert(l.outputs == params.inputs);
+
+	l.log = option_find_int_quiet(options, "log", 0);
+	l.sqrt = option_find_int_quiet(options, "sqrt", 0);
+
+	l.softmax = option_find_int(options, "softmax", 0);
+	l.max_boxes = option_find_int_quiet(options, "max", 30);
+	l.jitter = option_find_float(options, "jitter", .2);
+	l.rescore = option_find_int_quiet(options, "rescore", 0);
+
+	l.thresh = option_find_float(options, "thresh", .5);
+	l.classfix = option_find_int_quiet(options, "classfix", 0);
+	l.absolute = option_find_int_quiet(options, "absolute", 0);
+	l.random = option_find_int_quiet(options, "random", 0);
+
+	l.coord_scale = option_find_float(options, "coord_scale", 1);
+	l.object_scale = option_find_float(options, "object_scale", 1);
+	l.noobject_scale = option_find_float(options, "noobject_scale", 1);
+	l.class_scale = option_find_float(options, "class_scale", 1);
+	l.bias_match = option_find_int_quiet(options, "bias_match", 0);
+
+	char *tree_file = option_find_str(options, "tree", 0);
+	if (tree_file) l.softmax_tree = read_tree(tree_file);
+	char *map_file = option_find_str(options, "map", 0);
+	if (map_file) l.map = read_map(map_file);
+
+	char *a = option_find_str(options, "anchors", 0);
+	if (a) {
+		int len = strlen(a);
+		int n = 1;
+		int i;
+		for (i = 0; i < len; ++i) {
+			if (a[i] == ',') ++n;
+		}
+		for (i = 0; i < n; ++i) {
+			float bias = atof(a);
+			l.biases[i] = bias;
+			a = strchr(a, ',') + 1;
+		}
+	}
+	return l;
+}
+layer parse_region7(list *options, size_params params)
+{
+	int coords = option_find_int(options, "coords", 7);
+	int classes = option_find_int(options, "classes", 20);
+	int num = option_find_int(options, "num", 1);
+
+	layer l = make_region_layer7(params.batch, params.w, params.h, num, classes, coords);
+	assert(l.outputs == params.inputs);
+
+	l.log = option_find_int_quiet(options, "log", 0);
+	l.sqrt = option_find_int_quiet(options, "sqrt", 0);
+
+	l.softmax = option_find_int(options, "softmax", 0);
+	l.max_boxes = option_find_int_quiet(options, "max", 30);
+	l.jitter = option_find_float(options, "jitter", .2);
+	l.rescore = option_find_int_quiet(options, "rescore", 0);
+
+	l.thresh = option_find_float(options, "thresh", .5);
+	l.classfix = option_find_int_quiet(options, "classfix", 0);
+	l.absolute = option_find_int_quiet(options, "absolute", 0);
+	l.random = option_find_int_quiet(options, "random", 0);
+
+	l.coord_scale = option_find_float(options, "coord_scale", 1);
+	l.object_scale = option_find_float(options, "object_scale", 1);
+	l.noobject_scale = option_find_float(options, "noobject_scale", 1);
+	l.class_scale = option_find_float(options, "class_scale", 1);
+	l.bias_match = option_find_int_quiet(options, "bias_match", 0);
+	
+	//where differs from region layer 5
+	//int roi_pooling_flag = option_find_int_quiet(options, "roipool", 0);
+	l.roiboxes = NULL;
+	roiboxes = calloc(1,sizeof(roiboxes));
+	roiboxes->roibox = calloc(l.max_boxes*l.batch, sizeof(roi_box));
+	roiboxes->n = calloc(l.batch, sizeof(int));
+	roiboxes->prob = calloc(l.max_boxes*l.batch, sizeof(float));
+	if(option_find_int_quiet(options, "roipool", 0)){
+		l.roiboxes = roiboxes;
+	}
+
+	char *tree_file = option_find_str(options, "tree", 0);
+	if (tree_file) l.softmax_tree = read_tree(tree_file);
+	char *map_file = option_find_str(options, "map", 0);
+	if (map_file) l.map = read_map(map_file);
+
+	char *a = option_find_str(options, "anchors", 0);
+	if (a) {
+		int len = strlen(a);
+		int n = 1;
+		int i;
+		for (i = 0; i < len; ++i) {
+			if (a[i] == ',') ++n;
+		}
+		for (i = 0; i < n; ++i) {
+			float bias = atof(a);
+			l.biases[i] = bias;
+			a = strchr(a, ',') + 1;
+		}
+	}
+	return l;
+}
 detection_layer parse_detection(list *options, size_params params)
 {
     int coords = option_find_int(options, "coords", 1);
@@ -369,6 +515,23 @@ maxpool_layer parse_maxpool(list *options, size_params params)
     if(!(h && w && c)) error("Layer before maxpool layer must output image.");
 
     maxpool_layer layer = make_maxpool_layer(batch,h,w,c,size,stride,padding);
+    return layer;
+}
+
+roipool_layer parse_roipool(list *options, size_params params)
+{
+    int size = option_find_int(options, "size",7);
+    int padding = option_find_int_quiet(options, "padding", (size-1)/2);
+	int n = option_find_int(options, "maxbox",10);
+
+    int batch,h,w,c;
+    h = params.h;
+    w = params.w;
+    c = params.c;
+    batch=params.batch;
+    if(!(h && w && c)) error("Layer before maxpool layer must output image.");
+
+    roipool_layer layer = make_roipool_layer(batch,h,w,c,n,size,padding);
     return layer;
 }
 
@@ -593,7 +756,7 @@ network parse_network_cfg(char *filename)
     section *s = (section *)n->val;
     list *options = s->options;
     if(!is_network(s)) error("First section must be [net] or [network]");
-    parse_net_options(options, &net);
+    parse_net_options(options, &net);//general settings for network
 
     params.h = net.h;
     params.w = net.w;
@@ -662,7 +825,19 @@ network parse_network_cfg(char *filename)
             l.output_gpu = net.layers[count-1].output_gpu;
             l.delta_gpu = net.layers[count-1].delta_gpu;
 #endif
-        }else{
+        }else if (lt == REGION5) {
+			l = parse_region5(options, params);
+		}else if (lt == REGION7) {
+			l = parse_region7(options, params);
+		}else if (lt == DECONVOLUTIONAL) {
+			l = parse_deconvolutional(options, params);
+		}else if (lt == ROIPOOL) {
+			//l.roiboxes
+			l = parse_roipool(options, params);
+			params.batch *= l.max_boxes;
+		}/*else if (lt == ROICONNECTED) {
+			l = parse_connected(options, params);
+		}*/else {
             fprintf(stderr, "Type not recognized: %s\n", s->type);
         }
         l.dontload = option_find_int_quiet(options, "dontload", 0);
