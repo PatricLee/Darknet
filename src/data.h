@@ -32,7 +32,7 @@ typedef struct{
 } data;
 
 typedef enum {
-    CLASSIFICATION_DATA, DETECTION_DATA, CAPTCHA_DATA, REGION_DATA, IMAGE_DATA, COMPARE_DATA, WRITING_DATA, SWAG_DATA, TAG_DATA, OLD_CLASSIFICATION_DATA, STUDY_DATA, DET_DATA, SUPER_DATA
+    CLASSIFICATION_DATA, DETECTION_DATA, CAPTCHA_DATA, REGION_DATA, IMAGE_DATA, COMPARE_DATA, WRITING_DATA, SWAG_DATA, TAG_DATA, OLD_CLASSIFICATION_DATA, STUDY_DATA, DET_DATA, SUPER_DATA, DETECTION_DATA2, DETECTION_DATA3, DETECTION_DATA0
 } data_type;
 
 typedef struct load_args{
@@ -71,10 +71,25 @@ typedef struct{
     float x,y,w,h;
     float left, right, top, bottom;
 } box_label;
+typedef struct {
+	int id;
+	float x, y, w, h, rz;
+	float left, right, top, bottom;
+	int used;
+} box_label2;
+typedef struct {
+	int id;
+	float x, y, w, h, rz, z, l;
+	float left, right, top, bottom;
+	int used;
+} box_label3;
 
 void free_data(data d);
 
 pthread_t load_data(load_args args);
+pthread_t load_data_cronus(load_args args);
+pthread_t load_data_cronus7(load_args args);
+//pthread_t load_data_cronus_sub(load_args args);
 
 pthread_t load_data_in_thread(load_args args);
 
@@ -90,6 +105,8 @@ data load_data_augment(char **paths, int n, int m, char **labels, int k, tree *h
 data load_go(char *filename);
 
 box_label *read_boxes(char *filename, int *n);
+box_label2 *read_boxes5(char *filename, int *n);
+box_label3 *read_boxes7(char *filename, int *n);
 data load_cifar10_data(char *filename);
 data load_all_cifar10();
 

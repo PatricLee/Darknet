@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
+#include "image.h"
 
 box float_to_box(float *f)
 {
@@ -11,6 +12,28 @@ box float_to_box(float *f)
     b.w = f[2];
     b.h = f[3];
     return b;
+}
+box2 float_to_box5(float *f)
+{
+	box2 b;
+	b.x = f[0];
+	b.y = f[1];
+	b.w = f[2];
+	b.h = f[3];
+	b.rz = f[4];
+	return b;
+}
+box3 float_to_box7(float *f)
+{
+	box3 b;
+	b.x = f[0];
+	b.y = f[1];
+	b.w = f[2];
+	b.h = f[3];
+	b.rz = f[4];
+	b.z = f[5];
+	b.l = f[6];
+	return b;
 }
 
 dbox derivative(box a, box b)
@@ -94,6 +117,124 @@ float box_union(box a, box b)
 float box_iou(box a, box b)
 {
     return box_intersection(a, b)/box_union(a, b);
+}
+//return a score rather than iou
+//now return iou via approximate method
+float box_iou5(box2 a, box2 b)
+{
+	/*float pos, size, rot;
+	pos = sqrtf(powf(a.x - b.x, 2.0) + powf(a.y - b.y, 2.0));
+	pos = expf(-10.0*pos);
+
+	size = expf(-fabsf(a.w / b.w - 1.0))*expf(-fabsf(a.h / b.h - 1.0));
+	
+	rot = fabsf(cosf(a.rz - b.rz));
+
+	return pos*size*rot;*/
+	//IplImage *p = cvCreateImage(cvSize(400, 400), IPL_DEPTH_8U, 1);
+	float ra[9] = { cosf(a.rz), -sinf(a.rz),a.x,
+					sinf(a.rz),cosf(a.rz),a.y,
+					0,0,1 };
+	float rb[9] = { cosf(b.rz),sinf(b.rz),-cosf(b.rz)*b.x - sinf(b.rz)*b.y,
+					-sinf(b.rz),cosf(b.rz),sinf(b.rz)*b.x - cosf(b.rz)*b.y,
+					0,0,1 };
+	float xin[3], xmid[3], xout[3];
+	/*CvMat ra, rb, x_in, x_mid, x_out;
+	ra = cvMat(3, 3, CV_32FC1, ra_val);
+	rb = cvMat(3, 3, CV_32FC1, rb_val);
+	x_in = cvMat(3, 1, CV_32FC1, xin_val);
+	x_mid = cvMat(3, 1, CV_32FC1, xmid_val);
+	x_out = cvMat(3, 1, CV_32FC1, xout_val);*/
+	int i, j, icount = 0;
+	for (i = -5; i <= 5; i++) {
+		for (j = -5; j <= 5; j++) {
+			/*float xin_val[3] = { i*a.w / 9,j*a.h / 9, 1};
+			cvMatMul(&ra, &x_in, &x_mid);
+			cvMatMul(&rb, &x_mid, &x_out);*/
+			xin[0] = i*a.w / 11;
+			xin[1] = j*a.h / 11;
+			xin[2] = 1;
+			//printf("xin(%f,%f,%f)", xin[0], xin[1], xin[2]);
+			xmid[0] = ra[0] * xin[0] + ra[1] * xin[1] + ra[2] * xin[2];
+			xmid[1] = ra[3] * xin[0] + ra[4] * xin[1] + ra[5] * xin[2];
+			xmid[2] = ra[6] * xin[0] + ra[7] * xin[1] + ra[8] * xin[2];
+			//printf("xmid(%f,%f,%f)", xmid[0], xmid[1], xmid[2]);
+			xout[0] = rb[0] * xmid[0] + rb[1] * xmid[1] + rb[2] * xmid[2];
+			xout[1] = rb[3] * xmid[0] + rb[4] * xmid[1] + rb[5] * xmid[2];
+			xout[2] = rb[6] * xmid[0] + rb[7] * xmid[1] + rb[8] * xmid[2];
+			//printf("xout(%f,%f,%f)", xout[0], xout[1], xout[2]);
+			if (xout[0]<(b.w / 2) && xout[0]>(-b.w / 2) && xout[1]<(b.h / 2) && xout[1]>(-b.h / 2)) {
+				icount++;
+			}
+		}
+	}
+	//cvReleaseMat(&ra);
+	//cvReleaseMat(&rb);
+	//cvReleaseMat(&x);
+	float inter = a.w*a.h / 121 * icount;
+	float uni = a.w*a.h + b.w*b.h - inter;
+	return inter / uni;
+
+	/*float i, u;
+	float a_l, a_r, a_t, a_b, b_l, b_r, b_t, b_b;
+	float i_l, i_r, i_t, i_b;
+	float boarder_temp1, boarder_temp2;
+	boarder_temp1 = -a.w / 2 * cosf(a.rz) - a.h / 2 * sinf(a.rz);
+	boarder_temp2 = -a.w / 2 * cosf(a.rz) + a.h / 2 * cosf(a.rz);
+	a_l = (boarder_temp1 < boarder_temp2) ? boarder_temp1 : boarder_temp2;
+	a_l += a.x;
+	a_l = (a_l > 0) ? a_l : 0;
+	boarder_temp1 = a.w / 2 * cosf(a.rz) - a.h / 2 * sinf(a.rz);
+	boarder_temp2 = a.w / 2 * cosf(a.rz) + a.h / 2 * sinf(a.rz);
+	a_r = (boarder_temp1 > boarder_temp2) ? boarder_temp1 : boarder_temp2;
+	a_r += a.x;
+	a_r = (a_r < 1) ? a_r : 1;
+	boarder_temp1 = a.w / 2 * sinf(a.rz) - a.h / 2 * cosf(a.rz);
+	boarder_temp2 = -a.w / 2 * sinf(a.rz) - a.h / 2 * cosf(a.rz);
+	a_t = (boarder_temp1 < boarder_temp2) ? boarder_temp1 : boarder_temp2;
+	a_t += a.y;
+	a_t = (a_t > 0) ? a_t : 0;
+	boarder_temp1 = a.w / 2 * sinf(a.rz) + a.h / 2 * cosf(a.rz);
+	boarder_temp2 = -a.w / 2 * sinf(a.rz) + a.h / 2 * cosf(a.rz);
+	a_b = (boarder_temp1 > boarder_temp2) ? boarder_temp1 : boarder_temp2;
+	a_b += a.y;
+	a_b = (a_b < 1) ? a_b : 1;
+
+	boarder_temp1 = -b.w / 2 * cosf(b.rz) - b.h / 2 * sinf(b.rz);
+	boarder_temp2 = -b.w / 2 * cosf(b.rz) + b.h / 2 * cosf(b.rz);
+	b_l = (boarder_temp1 < boarder_temp2) ? boarder_temp1 : boarder_temp2;
+	b_l += b.x;
+	b_l = (b_l > 0) ? b_l : 0;
+	boarder_temp1 = b.w / 2 * cosf(b.rz) - b.h / 2 * sinf(b.rz);
+	boarder_temp2 = b.w / 2 * cosf(b.rz) + b.h / 2 * sinf(b.rz);
+	b_r = (boarder_temp1 > boarder_temp2) ? boarder_temp1 : boarder_temp2;
+	b_r += b.x;
+	b_r = (b_r < 1) ? b_r : 1;
+	boarder_temp1 = b.w / 2 * sinf(b.rz) - b.h / 2 * cosf(b.rz);
+	boarder_temp2 = -b.w / 2 * sinf(b.rz) - b.h / 2 * cosf(b.rz);
+	b_t = (boarder_temp1 < boarder_temp2) ? boarder_temp1 : boarder_temp2;
+	b_t += b.y;
+	b_t = (b_t > 0) ? b_t : 0;
+	boarder_temp1 = b.w / 2 * sinf(b.rz) + b.h / 2 * cosf(b.rz);
+	boarder_temp2 = -b.w / 2 * sinf(b.rz) + b.h / 2 * cosf(b.rz);
+	b_b = (boarder_temp1 > boarder_temp2) ? boarder_temp1 : boarder_temp2;
+	b_b += b.y;
+	b_b = (b_b < 1) ? b_b : 1;
+
+	i_l = (a_l > b_l) ? a_l : b_l;
+	i_r = (a_r < b_r) ? a_r : b_r;
+	i_t = (a_t > b_t) ? a_t : b_t;
+	i_b = (a_b < b_b) ? a_b : b_b;
+
+	if (i_l >= i_r || i_t >= i_b)return 0;
+	i = (i_r - i_l)*(i_b - i_t);
+
+	u = (a_r - a_l)*(a_b - a_t) + (b_r - b_l)*(b_b - b_t) - i;
+
+	return i / u;*/
+}
+float box_iou7(box3 a, box3 b){
+	return box_iou5(*((box2 *)&a), *((box2 *)&b));
 }
 
 float box_rmse(box a, box b)
@@ -275,6 +416,63 @@ void do_nms_sort(box *boxes, float **probs, int total, int classes, float thresh
     }
     free(s);
 }
+void do_nms_sort5(box2 *boxes, float **probs, int total, int classes, float thresh)
+{
+	int i, j, k;
+	sortable_bbox *s = calloc(total, sizeof(sortable_bbox));
+
+	for (i = 0; i < total; ++i) {
+		s[i].index = i;
+		s[i].class = 0;
+		s[i].probs = probs;
+	}
+
+	for (k = 0; k < classes; ++k) {
+		for (i = 0; i < total; ++i) {
+			s[i].class = k;
+		}
+		qsort(s, total, sizeof(sortable_bbox), nms_comparator);
+		for (i = 0; i < total; ++i) {
+			if (probs[s[i].index][k] == 0) continue;
+			box2 a = boxes[s[i].index];
+			for (j = i + 1; j < total; ++j) {
+				box2 b = boxes[s[j].index];
+				if (box_iou5(a, b) > thresh) {
+					probs[s[j].index][k] = 0;
+				}
+			}
+		}
+	}
+	free(s);
+}void do_nms_sort7(box3 *boxes, float **probs, int total, int classes, float thresh)
+{
+	int i, j, k;
+	sortable_bbox *s = calloc(total, sizeof(sortable_bbox));
+
+	for (i = 0; i < total; ++i) {
+		s[i].index = i;
+		s[i].class = 0;
+		s[i].probs = probs;
+	}
+
+	for (k = 0; k < classes; ++k) {
+		for (i = 0; i < total; ++i) {
+			s[i].class = k;
+		}
+		qsort(s, total, sizeof(sortable_bbox), nms_comparator);
+		for (i = 0; i < total; ++i) {
+			if (probs[s[i].index][k] == 0) continue;
+			box3 a = boxes[s[i].index];
+			for (j = i + 1; j < total; ++j) {
+				box3 b = boxes[s[j].index];
+				if (box_iou7(a, b) > thresh) {
+					probs[s[j].index][k] = 0;
+				}
+			}
+		}
+	}
+	free(s);
+}
 
 void do_nms(box *boxes, float **probs, int total, int classes, float thresh)
 {
@@ -294,6 +492,44 @@ void do_nms(box *boxes, float **probs, int total, int classes, float thresh)
             }
         }
     }
+}
+void do_nms5(box2 *boxes, float **probs, int total, int classes, float thresh)
+{
+	int i, j, k;
+	for (i = 0; i < total; ++i) {
+		int any = 0;
+		for (k = 0; k < classes; ++k) any = any || (probs[i][k] > 0);
+		if (!any) {
+			continue;
+		}
+		for (j = i + 1; j < total; ++j) {
+			if (box_iou5(boxes[i], boxes[j]) > thresh) {
+				for (k = 0; k < classes; ++k) {
+					if (probs[i][k] < probs[j][k]) probs[i][k] = 0;
+					else probs[j][k] = 0;
+				}
+			}
+		}
+	}
+}
+void do_nms7(box3 *boxes, float **probs, int total, int classes, float thresh)
+{
+	int i, j, k;
+	for (i = 0; i < total; ++i) {
+		int any = 0;
+		for (k = 0; k < classes; ++k) any = any || (probs[i][k] > 0);
+		if (!any) {
+			continue;
+		}
+		for (j = i + 1; j < total; ++j) {
+			if (box_iou7(boxes[i], boxes[j]) > thresh) {
+				for (k = 0; k < classes; ++k) {
+					if (probs[i][k] < probs[j][k]) probs[i][k] = 0;
+					else probs[j][k] = 0;
+				}
+			}
+		}
+	}
 }
 
 box encode_box(box b, box anchor)

@@ -6,6 +6,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef OPENCV
+#include "opencv2/highgui/highgui_c.h"
+#include "opencv2/imgproc/imgproc_c.h"
+#endif
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -29,7 +33,7 @@ char **get_random_paths_indexes(char **paths, int n, int m, int *indexes)
     int i;
     pthread_mutex_lock(&mutex);
     for(i = 0; i < n; ++i){
-        int index = random_gen()%m;
+        int index = rand()%m;
         indexes[i] = index;
         random_paths[i] = paths[index];
         if(i == 0) printf("%s\n", paths[index]);
@@ -39,25 +43,23 @@ char **get_random_paths_indexes(char **paths, int n, int m, int *indexes)
 }
 */
 
-inline unsigned int random_gen()
-{
-	unsigned int Num = 0;
-	rand_s(&Num);
-	return Num;
-}
+int mt_seed = 0;
 
 char **get_random_paths(char **paths, int n, int m)
 {
     char **random_paths = calloc(n, sizeof(char*));
     int i;
     pthread_mutex_lock(&mutex);
+	if (mt_seed == 0) mt_seed = time(0);
+	srand(mt_seed);
 	//printf("n = %d \n", n);
-    for(i = 0; i < n; ++i){		
-        int index = random_gen() % m;
+	for (i = 0; i < n; ++i) {
+		int index = rand() % m;
         random_paths[i] = paths[index];
         //if(i == 0) printf("%s\n", paths[index]);
-		//printf("grp: %s\n", paths[index]);
+		//printf("grp:%s\n", paths[index]);
     }
+	mt_seed = rand();
     pthread_mutex_unlock(&mutex);
     return random_paths;
 }
@@ -122,7 +124,7 @@ matrix load_image_augment_paths(char **paths, int n, int min, int max, int size,
     for(i = 0; i < n; ++i){
         image im = load_image_color(paths[i], 0, 0);
         image crop = random_augment_image(im, angle, aspect, min, max, size);
-        int flip = random_gen()%2;
+        int flip = rand()%2;
         if (flip) flip_image(crop);
         random_distort_image(crop, hue, saturation, exposure);
 
@@ -165,15 +167,134 @@ box_label *read_boxes(char *filename, int *n)
     return boxes;
 }
 
+box_label2 *read_boxes5(char *filename, int *n)
+{
+	box_label2 *boxes = calloc(1, sizeof(box_label2));
+	FILE *file = fopen(filename, "r");
+	if (!file) file_error(filename);
+	float x, y, h, w, rz;
+	int id;
+	int count = 0;
+	float boarder_temp1, boarder_temp2;
+	while (fscanf(file, "%d %f %f %f %f %f", &id, &x, &y, &w, &h, &rz) == 6) {
+		boxes = realloc(boxes, (count + 1) * sizeof(box_label2));
+		boxes[count].id = id;
+		boxes[count].x = x;
+		boxes[count].y = y;
+		boxes[count].h = h;
+		boxes[count].w = w;
+		boxes[count].rz = rz;
+		boxes[count].used = 0;
+		/*boxes[count].left = x - w / 2;
+		boxes[count].right = x + w / 2;
+		boxes[count].top = y - h / 2;
+		boxes[count].bottom = y + h / 2;*/
+		boarder_temp1 = -w / 2 * cosf(rz) - h / 2 * sinf(rz);
+		boarder_temp2 = -w / 2 * cosf(rz) + h / 2 * cosf(rz);
+		boxes[count].left = (boarder_temp1 < boarder_temp2) ? boarder_temp1 : boarder_temp2;
+		boxes[count].left += x;
+		boxes[count].left = (boxes[count].left > 0) ? boxes[count].left : 0;
+		boarder_temp1 = w / 2 * cosf(rz) - h / 2 * sinf(rz);
+		boarder_temp2 = w / 2 * cosf(rz) + h / 2 * sinf(rz);
+		boxes[count].right = (boarder_temp1 > boarder_temp2) ? boarder_temp1 : boarder_temp2;
+		boxes[count].right += x;
+		boxes[count].right = (boxes[count].right < 1) ? boxes[count].right : 1;
+		boarder_temp1 = w / 2 * sinf(rz) - h / 2 * cosf(rz);
+		boarder_temp2 = -w / 2 * sinf(rz) - h / 2 * cosf(rz);
+		boxes[count].top = (boarder_temp1 < boarder_temp2) ? boarder_temp1 : boarder_temp2;
+		boxes[count].top += y;
+		boxes[count].top = (boxes[count].top > 0) ? boxes[count].top : 0;
+		boarder_temp1 = w / 2 * sinf(rz) + h / 2 * cosf(rz);
+		boarder_temp2 = -w / 2 * sinf(rz) + h / 2 * cosf(rz);
+		boxes[count].bottom = (boarder_temp1 > boarder_temp2) ? boarder_temp1 : boarder_temp2;
+		boxes[count].bottom += y;
+		boxes[count].bottom = (boxes[count].bottom < 1) ? boxes[count].bottom : 1;
+		++count;
+	}
+	fclose(file);
+	*n = count;
+	return boxes;
+}
+box_label3 *read_boxes7(char *filename, int *n)
+{
+	box_label3 *boxes = calloc(1, sizeof(box_label3));
+	FILE *file = fopen(filename, "r");
+	if (!file) file_error(filename);
+	float x, y, h, w, rz, z, l;
+	int id;
+	int count = 0;
+	//float boarder_temp1, boarder_temp2;
+	while (fscanf(file, "%d %f %f %f %f %f %f %f", &id, &x, &y, &w, &h, &rz, &z, &l) == 8) {
+		boxes = realloc(boxes, (count + 1) * sizeof(box_label3));
+		boxes[count].id = id;
+		boxes[count].x = x;
+		boxes[count].y = y;
+		boxes[count].h = h;
+		boxes[count].w = w;
+		boxes[count].rz = rz;
+		boxes[count].z = z;
+		boxes[count].l = l;
+		boxes[count].used = 0;
+		/*boxes[count].left = x - w / 2;
+		boxes[count].right = x + w / 2;
+		boxes[count].top = y - h / 2;
+		boxes[count].bottom = y + h / 2;*/
+		/*boarder_temp1 = -w / 2 * cosf(rz) - h / 2 * sinf(rz);
+		boarder_temp2 = -w / 2 * cosf(rz) + h / 2 * cosf(rz);
+		boxes[count].left = (boarder_temp1 < boarder_temp2) ? boarder_temp1 : boarder_temp2;
+		boxes[count].left += x;
+		boxes[count].left = (boxes[count].left > 0) ? boxes[count].left : 0;
+		boarder_temp1 = w / 2 * cosf(rz) - h / 2 * sinf(rz);
+		boarder_temp2 = w / 2 * cosf(rz) + h / 2 * sinf(rz);
+		boxes[count].right = (boarder_temp1 > boarder_temp2) ? boarder_temp1 : boarder_temp2;
+		boxes[count].right += x;
+		boxes[count].right = (boxes[count].right < 1) ? boxes[count].right : 1;
+		boarder_temp1 = w / 2 * sinf(rz) - h / 2 * cosf(rz);
+		boarder_temp2 = -w / 2 * sinf(rz) - h / 2 * cosf(rz);
+		boxes[count].top = (boarder_temp1 < boarder_temp2) ? boarder_temp1 : boarder_temp2;
+		boxes[count].top += y;
+		boxes[count].top = (boxes[count].top > 0) ? boxes[count].top : 0;
+		boarder_temp1 = w / 2 * sinf(rz) + h / 2 * cosf(rz);
+		boarder_temp2 = -w / 2 * sinf(rz) + h / 2 * cosf(rz);
+		boxes[count].bottom = (boarder_temp1 > boarder_temp2) ? boarder_temp1 : boarder_temp2;
+		boxes[count].bottom += y;
+		boxes[count].bottom = (boxes[count].bottom < 1) ? boxes[count].bottom : 1;*/
+		++count;
+	}
+	fclose(file);
+	*n = count;
+	return boxes;
+}
+
 void randomize_boxes(box_label *b, int n)
 {
     int i;
     for(i = 0; i < n; ++i){
         box_label swap = b[i];
-        int index = random_gen()%n;
+        int index = rand()%n;
         b[i] = b[index];
         b[index] = swap;
     }
+}
+void randomize_boxes5(box_label2 *b, int n)
+{
+	int i;
+	for (i = 0; i < n; ++i) {
+		box_label2 swap = b[i];
+		int index = rand() % n;
+		b[i] = b[index];
+		b[index] = swap;
+	}
+}
+void randomize_boxes7(box_label3 *b, int n)
+{
+	int i;
+	for (i = 0; i < n; ++i) {
+		box_label3 swap = b[i];
+		int index = rand() % n;
+		b[i] = b[index];
+		b[index] = swap;
+	}
 }
 
 void correct_boxes(box_label *boxes, int n, float dx, float dy, float sx, float sy, int flip)
@@ -211,6 +332,43 @@ void correct_boxes(box_label *boxes, int n, float dx, float dy, float sx, float 
         boxes[i].w = constrain(0, 1, boxes[i].w);
         boxes[i].h = constrain(0, 1, boxes[i].h);
     }
+}
+//still not clear what this function does
+void correct_boxes5(box_label2 *boxes, int n, float dx, float dy, float sx, float sy, int flip)
+{
+	int i;
+	for (i = 0; i < n; ++i) {
+		if (boxes[i].x == 0 && boxes[i].y == 0) {
+			boxes[i].x = 999999;
+			boxes[i].y = 999999;
+			boxes[i].w = 999999;
+			boxes[i].h = 999999;
+			continue;
+		}
+		boxes[i].left = boxes[i].left  * sx - dx;
+		boxes[i].right = boxes[i].right * sx - dx;
+		boxes[i].top = boxes[i].top   * sy - dy;
+		boxes[i].bottom = boxes[i].bottom* sy - dy;
+
+		if (flip) {
+			float swap = boxes[i].left;
+			boxes[i].left = 1. - boxes[i].right;
+			boxes[i].right = 1. - swap;
+		}
+
+		boxes[i].left = constrain(0, 1, boxes[i].left);
+		boxes[i].right = constrain(0, 1, boxes[i].right);
+		boxes[i].top = constrain(0, 1, boxes[i].top);
+		boxes[i].bottom = constrain(0, 1, boxes[i].bottom);
+
+		boxes[i].x = (boxes[i].left + boxes[i].right) / 2;
+		boxes[i].y = (boxes[i].top + boxes[i].bottom) / 2;
+		boxes[i].w = (boxes[i].right - boxes[i].left);
+		boxes[i].h = (boxes[i].bottom - boxes[i].top);
+
+		boxes[i].w = constrain(0, 1, boxes[i].w);
+		boxes[i].h = constrain(0, 1, boxes[i].h);
+	}
 }
 
 void fill_truth_swag(char *path, float *truth, int classes, int flip, float dx, float dy, float sx, float sy)
@@ -335,6 +493,121 @@ void fill_truth_detection(char *path, int num_boxes, float *truth, int classes, 
         truth[i*5+4] = id;
     }
     free(boxes);
+}
+void fill_truth_detection0(char *path, int num_boxes, float *truth, int classes)//, int flip, float dx, float dy, float sx, float sy)
+{
+    char labelpath[4096];
+    find_replace(path, ".jpg", ".txt", labelpath);
+    find_replace(labelpath, ".png", ".txt", labelpath);
+    find_replace(labelpath, ".JPG", ".txt", labelpath);
+    find_replace(labelpath, ".JPEG", ".txt", labelpath);
+    int count = 0;
+    box_label *boxes = read_boxes(labelpath, &count);
+    randomize_boxes(boxes, count);
+    //correct_boxes(boxes, count, dx, dy, sx, sy, flip);
+    if(count > num_boxes) count = num_boxes;
+    float x,y,w,h;
+    int id;
+    int i;
+
+    for (i = 0; i < count; ++i) {
+        x =  boxes[i].x;
+        y =  boxes[i].y;
+        w =  boxes[i].w;
+        h =  boxes[i].h;
+        id = boxes[i].id;
+
+        if ((w < .01 || h < .01)) continue;
+
+        truth[i*5+0] = x;
+        truth[i*5+1] = y;
+        truth[i*5+2] = w;
+        truth[i*5+3] = h;
+        truth[i*5+4] = id;
+    }
+    free(boxes);
+}
+void fill_truth_detection2(char *path, int num_boxes, float *truth, int classes, int flip, float dx, float dy, float sx, float sy)
+{
+	char labelpath[4096];
+	//find_replace(path, "images", "labels", labelpath);
+	//find_replace(labelpath, "JPEGImages", "labels", labelpath);
+
+	//find_replace(labelpath, "raw", "labels", labelpath);
+	find_replace(path, ".jpg", ".txt", labelpath);
+	find_replace(labelpath, ".png", ".txt", labelpath);
+	find_replace(labelpath, ".JPG", ".txt", labelpath);
+	find_replace(labelpath, ".JPEG", ".txt", labelpath);
+	int count = 0;
+	box_label2 *boxes = read_boxes5(labelpath, &count);
+	randomize_boxes5(boxes, count);
+	//correct_boxes5(boxes, count, dx, dy, sx, sy, flip);
+	if (count > num_boxes) count = num_boxes;
+	float x, y, w, h, rz;
+	int id;
+	int i;
+
+	for (i = 0; i < count; ++i) {
+		x = boxes[i].x;
+		y = boxes[i].y;
+		w = boxes[i].w;
+		h = boxes[i].h;
+		rz = boxes[i].rz;
+		id = boxes[i].id;
+
+		if ((w < .01 || h < .01)) continue;
+
+		truth[i * 6 + 0] = x;
+		truth[i * 6 + 1] = y;
+		truth[i * 6 + 2] = w;
+		truth[i * 6 + 3] = h;
+		truth[i * 6 + 4] = rz;
+		truth[i * 6 + 5] = id;
+	}
+	free(boxes);
+}
+void fill_truth_detection3(char *path, int num_boxes, float *truth, int classes)// , int flip, float dx, float dy, float sx, float sy)
+{
+	char labelpath[4096];
+	//find_replace(path, "images", "labels", labelpath);
+	//find_replace(labelpath, "JPEGImages", "labels", labelpath);
+
+	//find_replace(labelpath, "raw", "labels", labelpath);
+	find_replace(path, ".jpg", ".txt", labelpath);
+	find_replace(labelpath, ".png", ".txt", labelpath);
+	find_replace(labelpath, ".JPG", ".txt", labelpath);
+	find_replace(labelpath, ".JPEG", ".txt", labelpath);
+	int count = 0;
+	box_label3 *boxes = read_boxes7(labelpath, &count);
+	randomize_boxes7(boxes, count);
+	//correct_boxes5(boxes, count, dx, dy, sx, sy, flip);
+	if (count > num_boxes) count = num_boxes;
+	float x, y, w, h, rz, z, l;
+	int id;
+	int i;
+
+	for (i = 0; i < count; ++i) {
+		x = boxes[i].x;
+		y = boxes[i].y;
+		w = boxes[i].w;
+		h = boxes[i].h;
+		rz = boxes[i].rz;
+		id = boxes[i].id;
+		z = boxes[i].z;
+		l = boxes[i].l;
+
+		if ((w < .001 || h < .001)) continue;
+
+		truth[i * 8 + 0] = x;
+		truth[i * 8 + 1] = y;
+		truth[i * 8 + 2] = w;
+		truth[i * 8 + 3] = h;
+		truth[i * 8 + 4] = rz;
+		truth[i * 8 + 5] = z;
+		truth[i * 8 + 6] = l;
+		truth[i * 8 + 7] = id;
+	}
+	free(boxes);
 }
 
 #define NUMCHARS 37
@@ -531,7 +804,7 @@ data load_data_region(int n, char **paths, int m, int w, int h, int size, int cl
         float sx = (float)swidth  / ow;
         float sy = (float)sheight / oh;
 
-        int flip = random_gen()%2;
+        int flip = rand()%2;
         image cropped = crop_image(orig, pleft, ptop, swidth, sheight);
 
         float dx = ((float)pleft/ow)/sx;
@@ -617,7 +890,7 @@ data load_data_compare(int n, char **paths, int m, int classes, int w, int h)
 
 data load_data_swag(char **paths, int n, int classes, float jitter)
 {
-    int index = random_gen()%n;
+    int index = rand()%n;
     char *random_path = paths[index];
 
     image orig = load_image_color(random_path, 0, 0);
@@ -650,7 +923,7 @@ data load_data_swag(char **paths, int n, int classes, float jitter)
     float sx = (float)swidth  / w;
     float sy = (float)sheight / h;
 
-    int flip = random_gen()%2;
+    int flip = rand()%2;
     image cropped = crop_image(orig, pleft, ptop, swidth, sheight);
 
     float dx = ((float)pleft/w)/sx;
@@ -700,7 +973,7 @@ data load_data_detection(int n, char **paths, int m, int w, int h, int boxes, in
         float sx = (float)swidth  / ow;
         float sy = (float)sheight / oh;
 
-        int flip = random_gen()%2;
+        int flip = rand()%2;
         image cropped = crop_image(orig, pleft, ptop, swidth, sheight);
 
         float dx = ((float)pleft/ow)/sx;
@@ -719,12 +992,164 @@ data load_data_detection(int n, char **paths, int m, int w, int h, int boxes, in
     free(random_paths);
     return d;
 }
+data load_data_detection0(int n, char **paths, int m, int w, int h, int boxes, int classes, float jitter, float hue, float saturation, float exposure)
+{
+    char **random_paths = get_random_paths(paths, n, m);
+    int i;
+    data d = {0};
+    d.shallow = 0;
 
+    d.X.rows = n;
+    d.X.vals = calloc(d.X.rows, sizeof(float*));
+    d.X.cols = h*w*3;
+
+    d.y = make_matrix(n, 5*boxes);
+    for(i = 0; i < n; ++i){
+        image orig = load_image_color(random_paths[i], 0, 0);
+
+        int oh = orig.h;
+        int ow = orig.w;
+
+        int dw = (ow*jitter);
+        int dh = (oh*jitter);
+
+        int pleft  = rand_uniform(-dw, dw);
+        int pright = rand_uniform(-dw, dw);
+        int ptop   = rand_uniform(-dh, dh);
+        int pbot   = rand_uniform(-dh, dh);
+
+        int swidth =  ow - pleft - pright;
+        int sheight = oh - ptop - pbot;
+
+        float sx = (float)swidth  / ow;
+        float sy = (float)sheight / oh;
+
+        int flip = rand()%2;
+        //image cropped = crop_image(orig, pleft, ptop, swidth, sheight);
+
+        float dx = ((float)pleft/ow)/sx;
+        float dy = ((float)ptop /oh)/sy;
+
+        image sized = resize_image(orig, w, h);
+        //if(flip) flip_image(sized);
+        //random_distort_image(sized, hue, saturation, exposure);
+        d.X.vals[i] = sized.data;
+
+        fill_truth_detection0(random_paths[i], boxes, d.y.vals[i], classes);//, flip, dx, dy, 1./sx, 1./sy);
+
+        free_image(orig);
+        //free_image(cropped);
+    }
+    free(random_paths);
+    return d;
+}
+data load_data_detection2(int n, char **paths, int m, int w, int h, int boxes, int classes, float jitter, float hue, float saturation, float exposure)
+{
+	char **random_paths = get_random_paths(paths, n, m);
+	int i;
+	data d = { 0 };
+	d.shallow = 0;
+
+	d.X.rows = n;
+	d.X.vals = calloc(d.X.rows, sizeof(float*));
+	d.X.cols = h*w * 3;
+
+	d.y = make_matrix(n, 6 * boxes);
+	for (i = 0; i < n; ++i) {
+		image orig = load_image_color(random_paths[i], 0, 0);
+
+		int oh = orig.h;
+		int ow = orig.w;
+
+		int dw = (ow*jitter);
+		int dh = (oh*jitter);
+
+		int pleft = rand_uniform(-dw, dw);
+		int pright = rand_uniform(-dw, dw);
+		int ptop = rand_uniform(-dh, dh);
+		int pbot = rand_uniform(-dh, dh);
+
+		int swidth = ow - pleft - pright;
+		int sheight = oh - ptop - pbot;
+
+		float sx = (float)swidth / ow;
+		float sy = (float)sheight / oh;
+
+		int flip = rand() % 2;
+		//image cropped = crop_image(orig, pleft, ptop, swidth, sheight);
+
+		float dx = ((float)pleft / ow) / sx;
+		float dy = ((float)ptop / oh) / sy;
+
+		//image sized = resize_image(cropped, w, h);
+		//if (flip) flip_image(orig);
+		//random_distort_image(orig, hue, saturation, exposure);
+		d.X.vals[i] = orig.data;
+
+		fill_truth_detection2(random_paths[i], boxes, d.y.vals[i], classes, flip, dx, dy, 1. / sx, 1. / sy);
+
+		/*free_image(orig);
+		free_image(cropped);*/
+	}
+	free(random_paths);
+	return d;
+}
+data load_data_detection3(int n, char **paths, int m, int w, int h, int boxes, int classes, float jitter, float hue, float saturation, float exposure)
+{
+	char **random_paths = get_random_paths(paths, n, m);
+	int i;
+	data d = { 0 };
+	d.shallow = 0;
+
+	d.X.rows = n;
+	d.X.vals = calloc(d.X.rows, sizeof(float*));
+	d.X.cols = h*w * 3;
+
+	d.y = make_matrix(n, 8 * boxes);
+	for (i = 0; i < n; ++i) {
+		image orig = load_image_color(random_paths[i], 0, 0);
+
+		int oh = orig.h;
+		int ow = orig.w;
+
+		int dw = (ow*jitter);
+		int dh = (oh*jitter);
+
+		int pleft = rand_uniform(-dw, dw);
+		int pright = rand_uniform(-dw, dw);
+		int ptop = rand_uniform(-dh, dh);
+		int pbot = rand_uniform(-dh, dh);
+
+		int swidth = ow - pleft - pright;
+		int sheight = oh - ptop - pbot;
+
+		float sx = (float)swidth / ow;
+		float sy = (float)sheight / oh;
+
+		int flip = rand() % 2;
+		//image cropped = crop_image(orig, pleft, ptop, swidth, sheight);
+
+		float dx = ((float)pleft / ow) / sx;
+		float dy = ((float)ptop / oh) / sy;
+
+		//image sized = resize_image(cropped, w, h);
+		//if (flip) flip_image(orig);
+		//random_distort_image(orig, hue, saturation, exposure);
+		d.X.vals[i] = orig.data;
+
+		fill_truth_detection3(random_paths[i], boxes, d.y.vals[i], classes);// , flip, dx, dy, 1. / sx, 1. / sy);
+
+		//free_image(orig);
+		//free_image(cropped);
+	}
+	free(random_paths);
+	return d;
+}
 
 void *load_thread(void *ptr)
 {
 	srand(time(0));
-    //printf("Loading data: %d\n", random_gen());
+    //printf("Loading data: %d\n", rand());
     load_args a = *(struct load_args*)ptr;
     if(a.exposure == 0) a.exposure = 1;
     if(a.saturation == 0) a.saturation = 1;
@@ -755,6 +1180,110 @@ void *load_thread(void *ptr)
     free(ptr);
     return 0;
 }
+void *load_thread2(void *ptr)
+{
+	srand(time(0));
+	//printf("Loading data: %d\n", rand());
+	load_args a = *(struct load_args*)ptr;
+	if (a.exposure == 0) a.exposure = 1;
+	if (a.saturation == 0) a.saturation = 1;
+	if (a.aspect == 0) a.aspect = 1;
+
+	if (a.type == OLD_CLASSIFICATION_DATA) {
+		*a.d = load_data_old(a.paths, a.n, a.m, a.labels, a.classes, a.w, a.h);
+	}
+	else if (a.type == CLASSIFICATION_DATA) {
+		*a.d = load_data_augment(a.paths, a.n, a.m, a.labels, a.classes, a.hierarchy, a.min, a.max, a.size, a.angle, a.aspect, a.hue, a.saturation, a.exposure);
+	}
+	else if (a.type == SUPER_DATA) {
+		*a.d = load_data_super(a.paths, a.n, a.m, a.w, a.h, a.scale);
+	}
+	else if (a.type == WRITING_DATA) {
+		*a.d = load_data_writing(a.paths, a.n, a.m, a.w, a.h, a.out_w, a.out_h);
+	}
+	else if (a.type == REGION_DATA) {
+		*a.d = load_data_region(a.n, a.paths, a.m, a.w, a.h, a.num_boxes, a.classes, a.jitter, a.hue, a.saturation, a.exposure);
+	}
+	else if (a.type == DETECTION_DATA) {
+		*a.d = load_data_detection(a.n, a.paths, a.m, a.w, a.h, a.num_boxes, a.classes, a.jitter, a.hue, a.saturation, a.exposure);
+	}
+	else if (a.type == DETECTION_DATA2) {
+		*a.d = load_data_detection2(a.n, a.paths, a.m, a.w, a.h, a.num_boxes, a.classes, a.jitter, a.hue, a.saturation, a.exposure);
+	}
+	else if (a.type == DETECTION_DATA3) {
+		*a.d = load_data_detection3(a.n, a.paths, a.m, a.w, a.h, a.num_boxes, a.classes, a.jitter, a.hue, a.saturation, a.exposure);
+	}
+	else if (a.type == DETECTION_DATA0) {
+		*a.d = load_data_detection0(a.n, a.paths, a.m, a.w, a.h, a.num_boxes, a.classes, a.jitter, a.hue, a.saturation, a.exposure);
+	}
+	else if (a.type == SWAG_DATA) {
+		*a.d = load_data_swag(a.paths, a.n, a.classes, a.jitter);
+	}
+	else if (a.type == COMPARE_DATA) {
+		*a.d = load_data_compare(a.n, a.paths, a.m, a.classes, a.w, a.h);
+	}
+	else if (a.type == IMAGE_DATA) {
+		*(a.im) = load_image_color(a.path, 0, 0);
+		*(a.resized) = resize_image(*(a.im), a.w, a.h);
+	}
+	else if (a.type == TAG_DATA) {
+		*a.d = load_data_tag(a.paths, a.n, a.m, a.classes, a.min, a.max, a.size, a.angle, a.aspect, a.hue, a.saturation, a.exposure);
+	}
+	free(ptr);
+	return 0;
+}
+void *load_thread3(void *ptr)
+{
+	srand(time(0));
+	//printf("Loading data: %d\n", rand());
+	load_args a = *(struct load_args*)ptr;
+	if (a.exposure == 0) a.exposure = 1;
+	if (a.saturation == 0) a.saturation = 1;
+	if (a.aspect == 0) a.aspect = 1;
+
+	if (a.type == OLD_CLASSIFICATION_DATA) {
+		*a.d = load_data_old(a.paths, a.n, a.m, a.labels, a.classes, a.w, a.h);
+	}
+	else if (a.type == CLASSIFICATION_DATA) {
+		*a.d = load_data_augment(a.paths, a.n, a.m, a.labels, a.classes, a.hierarchy, a.min, a.max, a.size, a.angle, a.aspect, a.hue, a.saturation, a.exposure);
+	}
+	else if (a.type == SUPER_DATA) {
+		*a.d = load_data_super(a.paths, a.n, a.m, a.w, a.h, a.scale);
+	}
+	else if (a.type == WRITING_DATA) {
+		*a.d = load_data_writing(a.paths, a.n, a.m, a.w, a.h, a.out_w, a.out_h);
+	}
+	else if (a.type == REGION_DATA) {
+		*a.d = load_data_region(a.n, a.paths, a.m, a.w, a.h, a.num_boxes, a.classes, a.jitter, a.hue, a.saturation, a.exposure);
+	}
+	else if (a.type == DETECTION_DATA) {
+		*a.d = load_data_detection(a.n, a.paths, a.m, a.w, a.h, a.num_boxes, a.classes, a.jitter, a.hue, a.saturation, a.exposure);
+	}
+	else if (a.type == DETECTION_DATA2) {
+		*a.d = load_data_detection2(a.n, a.paths, a.m, a.w, a.h, a.num_boxes, a.classes, a.jitter, a.hue, a.saturation, a.exposure);
+	}
+	else if (a.type == DETECTION_DATA3) {
+		*a.d = load_data_detection3(a.n, a.paths, a.m, a.w, a.h, a.num_boxes, a.classes, a.jitter, a.hue, a.saturation, a.exposure);
+	}
+	else if (a.type == DETECTION_DATA0) {
+		*a.d = load_data_detection0(a.n, a.paths, a.m, a.w, a.h, a.num_boxes, a.classes, a.jitter, a.hue, a.saturation, a.exposure);
+	}
+	else if (a.type == SWAG_DATA) {
+		*a.d = load_data_swag(a.paths, a.n, a.classes, a.jitter);
+	}
+	else if (a.type == COMPARE_DATA) {
+		*a.d = load_data_compare(a.n, a.paths, a.m, a.classes, a.w, a.h);
+	}
+	else if (a.type == IMAGE_DATA) {
+		*(a.im) = load_image_color(a.path, 0, 0);
+		*(a.resized) = resize_image(*(a.im), a.w, a.h);
+	}
+	else if (a.type == TAG_DATA) {
+		*a.d = load_data_tag(a.paths, a.n, a.m, a.classes, a.min, a.max, a.size, a.angle, a.aspect, a.hue, a.saturation, a.exposure);
+	}
+	free(ptr);
+	return 0;
+}
 
 pthread_t load_data_in_thread(load_args args)
 {
@@ -763,6 +1292,22 @@ pthread_t load_data_in_thread(load_args args)
     *ptr = args;
     if(pthread_create(&thread, 0, load_thread, ptr)) error("Thread creation failed");
     return thread;
+}
+pthread_t load_data_in_thread2(load_args args)
+{
+	pthread_t thread;
+	struct load_args *ptr = calloc(1, sizeof(struct load_args));
+	*ptr = args;
+	if (pthread_create(&thread, 0, load_thread2, ptr)) error("Thread creation failed");
+	return thread;
+}
+pthread_t load_data_in_thread3(load_args args)
+{
+	pthread_t thread;
+	struct load_args *ptr = calloc(1, sizeof(struct load_args));
+	*ptr = args;
+	if (pthread_create(&thread, 0, load_thread3, ptr)) error("Thread creation failed");
+	return thread;
 }
 
 void *load_threads(void *ptr)
@@ -794,6 +1339,64 @@ void *load_threads(void *ptr)
     free(threads);
     return 0;
 }
+void *load_threads2(void *ptr)
+{
+	srand(time(0));
+	int i;
+	load_args args = *(load_args *)ptr;
+	if (args.threads == 0) args.threads = 1;
+	data *out = args.d;
+	int total = args.n;
+	free(ptr);
+	data *buffers = calloc(args.threads, sizeof(data));
+	pthread_t *threads = calloc(args.threads, sizeof(pthread_t));
+	for (i = 0; i < args.threads; ++i) {
+		args.d = buffers + i;
+		args.n = (i + 1) * total / args.threads - i * total / args.threads;
+		threads[i] = load_data_in_thread2(args);
+	}
+	for (i = 0; i < args.threads; ++i) {
+		pthread_join(threads[i], 0);
+	}
+	*out = concat_datas(buffers, args.threads);
+	out->shallow = 0;
+	for (i = 0; i < args.threads; ++i) {
+		buffers[i].shallow = 1;
+		free_data(buffers[i]);
+	}
+	free(buffers);
+	free(threads);
+	return 0;
+}
+void *load_threads3(void *ptr)
+{
+	srand(time(0));
+	int i;
+	load_args args = *(load_args *)ptr;
+	if (args.threads == 0) args.threads = 1;
+	data *out = args.d;
+	int total = args.n;
+	free(ptr);
+	data *buffers = calloc(args.threads, sizeof(data));
+	pthread_t *threads = calloc(args.threads, sizeof(pthread_t));
+	for (i = 0; i < args.threads; ++i) {
+		args.d = buffers + i;
+		args.n = (i + 1) * total / args.threads - i * total / args.threads;
+		threads[i] = load_data_in_thread3(args);
+	}
+	for (i = 0; i < args.threads; ++i) {
+		pthread_join(threads[i], 0);
+	}
+	*out = concat_datas(buffers, args.threads);
+	out->shallow = 0;
+	for (i = 0; i < args.threads; ++i) {
+		buffers[i].shallow = 1;
+		free_data(buffers[i]);
+	}
+	free(buffers);
+	free(threads);
+	return 0;
+}
 
 pthread_t load_data(load_args args)
 {
@@ -802,6 +1405,22 @@ pthread_t load_data(load_args args)
     *ptr = args;
     if(pthread_create(&thread, 0, load_threads, ptr)) error("Thread creation failed");
     return thread;
+}
+pthread_t load_data_cronus(load_args args)
+{
+	pthread_t thread;
+	struct load_args *ptr = calloc(1, sizeof(struct load_args));
+	*ptr = args;
+	if (pthread_create(&thread, 0, load_threads2, ptr)) error("Thread creation failed");
+	return thread;
+}
+pthread_t load_data_cronus7(load_args args)
+{
+	pthread_t thread;
+	struct load_args *ptr = calloc(1, sizeof(struct load_args));
+	*ptr = args;
+	if (pthread_create(&thread, 0, load_threads3, ptr)) error("Thread creation failed");
+	return thread;
 }
 
 data load_data_writing(char **paths, int n, int m, int w, int h, int out_w, int out_h)
@@ -862,7 +1481,7 @@ data load_data_super(char **paths, int n, int m, int w, int h, int scale)
     for(i = 0; i < n; ++i){
         image im = load_image_color(paths[i], 0, 0);
         image crop = random_crop_image(im, w*scale, h*scale);
-        int flip = random_gen()%2;
+        int flip = rand()%2;
         if (flip) flip_image(crop);
         image resize = resize_image(crop, w, h);
         d.X.vals[i] = resize.data;
@@ -984,7 +1603,7 @@ void get_random_batch(data d, int n, float *X, float *y)
 {
     int j;
     for(j = 0; j < n; ++j){
-        int index = random_gen()%d.X.rows;
+        int index = rand()%d.X.rows;
         memcpy(X+j*d.X.cols, d.X.vals[index], d.X.cols*sizeof(float));
         memcpy(y+j*d.y.cols, d.y.vals[index], d.y.cols*sizeof(float));
     }
@@ -1097,7 +1716,7 @@ void randomize_data(data d)
 {
     int i;
     for(i = d.X.rows-1; i > 0; --i){
-        int index = random_gen()%i;
+        int index = rand()%i;
         float *swap = d.X.vals[index];
         d.X.vals[index] = d.X.vals[i];
         d.X.vals[i] = swap;
@@ -1161,7 +1780,7 @@ data get_random_data(data d, int num)
 
     int i;
     for(i = 0; i < num; ++i){
-        int index = random_gen()%d.X.rows;
+        int index = rand()%d.X.rows;
         r.X.vals[i] = d.X.vals[index];
         r.y.vals[i] = d.y.vals[index];
     }
