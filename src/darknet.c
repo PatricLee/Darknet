@@ -32,6 +32,9 @@ extern void run_go(int argc, char **argv);
 extern void run_art(int argc, char **argv);
 extern void run_super(int argc, char **argv);
 
+extern void run_cronus(int argc, char **argv);
+extern void run_cronus2(int argc, char **argv);
+
 void average(int argc, char *argv[])
 {
     char *cfgfile = argv[2];
@@ -353,10 +356,28 @@ int main(int argc, char **argv)
     //test_resize("data/bad.jpg");
     //test_box();
     //test_convolutional_layer();
+
+	//test iou
+	/*box2 a, b;
+	a.w = 0.1;
+	a.h = 0.1;
+	a.x = 0.5;
+	a.y = 0.5;
+	a.rz = 0;
+	b.w = 0.2;
+	b.h = 0.1;
+	b.x = 0.5;
+	b.y = 0.5;
+	b.rz = 0;
+	float iou_test = box_iou5(a, b);
+	printf("%f\n", iou_test);*/
+
     if(argc < 2){
         fprintf(stderr, "usage: %s <function>\n", argv[0]);
+		
         return 0;
     }
+	
     gpu_index = find_int_arg(argc, argv, "-i", 0);
     if(find_arg(argc, argv, "-nogpu")) {
         gpu_index = -1;
@@ -442,7 +463,16 @@ int main(int argc, char **argv)
         visualize(argv[2], (argc > 3) ? argv[3] : 0);
     } else if (0 == strcmp(argv[1], "imtest")){
         test_resize(argv[2]);
-    } else {
+    }
+	
+	else if (0 == strcmp(argv[1], "cronus")) {
+		run_cronus(argc, argv);
+	}
+	else if (0 == strcmp(argv[1], "cronus2")) {
+		run_cronus2(argc, argv);
+	}
+	
+	else {
         fprintf(stderr, "Not an option: %s\n", argv[1]);
     }
     return 0;
