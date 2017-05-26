@@ -1,0 +1,8 @@
+classes = 3
+train = D:/Kitti/train.txt
+valid = D:/Kitti/val.txt
+names = cronus.names
+backup = backup/Cronus
+config = cronus.cfg.old
+overseer = 0
+overseer_path = backup/overseer.txt

@@ -1,0 +1,8 @@
+classes = 2
+train = D:/Kitti2/train.txt
+valid = D:/Kitti2/val.txt
+names = D:/darknet/build/darknet/x64/cronus.names
+backup = D:/darknet/build/darknet/x64/Cronus/main
+config = D:/darknet/build/darknet/x64/Cronus/cronus.cfg
+overseer = 0
+overseer_path = D:/darknet/build/darknet/x64/Cronus/overseer.txt
