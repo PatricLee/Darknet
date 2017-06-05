@@ -1,9 +1,13 @@
 # Darknet - Velodyne
 
 Modified darknet for Velodyne, in Windows, to detect surrounding vehicles on an autonomous driving platform.
+
 This repository is forked from Yolo-Windows v2: https://github.com/AlexeyAB/darknet
+
 which is forked from the original Linux version: https://github.com/pjreddie/darknet
+
 which you may check out at: https://pjreddie.com/darknet/yolo
+
 I would like to thank AlexeyAB for his amazing job as well as his help.
 
 ## 0 Requirement
