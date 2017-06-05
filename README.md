@@ -33,7 +33,10 @@ Then you have to create your own version of `darknet.sln` and `darknet.vcxproj`.
 
 This should work for CUDA 6.0 and above, I'm not sure what will happen if you use a even earlier version, or a later version that is yet to come. If you run into CUDA problems with version earlier than 7.5, I suggest updating your CUDA to 8.0.
 
-#### 1.2.3 You have other version of OpenCV, which is 2.4.x but not 2.4.9
+#### 1.2.3 You don't want to use cuDNN
+If you use CUDA 8.0 I strongly recommand using cuDNN 5.1. But if you don't want to, open `build/darknet/darknet.sln`, right click on project -> properties -> C/C++ -> Preprocessor -> Preprocessor Definations, find and remove the line `CUDNN`.
+
+#### 1.2.4 You have other version of OpenCV, which is 2.4.x but not 2.4.9
 - Open `build/darknet/darknet.sln` in VS, right click on project -> properties -> C/C++ -> General -> Additional Include Directories.
 - Right click on project -> p[roperties -> Linker -> General -> Additional Library Directories.
 - Open `src/cronus.c`, change `249` in following lines to your version, like `2413` for version 2.4.13.
@@ -41,10 +44,10 @@ This should work for CUDA 6.0 and above, I'm not sure what will happen if you us
   - `#pragma comment(lib, "opencv_imgproc249.lib")`
   - `#pragma comment(lib, "opencv_highgui249.lib")` 
 
-#### 1.2.4 You have other version of OpenCV, which is not 2.4.x
+#### 1.2.5 You have other version of OpenCV, which is not 2.4.x
 Then you have to change A LOT of places in the code. *Why give yourself a hard time*?
 - Open `build/darknet/darknet.sln`, find all '#ifdef OPENCV' in every file.
-- Change all functions between '#ifdef OPENCV' and '#endif' to functions that do the same job in your version of OpenCV.
+- Change all functions between **#ifdef OPENCV** and **#endif** to functions that do the same job in your version of OpenCV.
 
 ## 2 Configure the Network
 
