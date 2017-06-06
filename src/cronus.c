@@ -16,6 +16,23 @@ static int coco_ids[] = {1,2,3,4,5,6,7,8,9,10,11,13,14,15,16,17,18,19,20,21,22,2
 
 roi_boxes *roiboxes;
 
+void PlotCurve(float *iou2d, float *iou3d, int n) {
+	float thres = 0;
+	int i, j;
+	int *th2 = calloc(20, sizeof(int));
+	int *th3 = calloc(20, sizeof(int));
+	for (i = 0; i < 20; i++) {
+		thres += 0.05;
+		for (j = 0; j < n; j++) {
+			if (iou2d[j] > thres)th2[i]++;
+			if (iou3d[j] > thres)th3[i]++;
+		}
+		printf("%.2f:\t%f\t%f\n", thres, (float)th2[i] / (float)n, (float)th3[i] / (float)n);
+	}
+
+	return;
+}
+
 void cronus2_trainmain(char *datacfg, char *weightfile, int *gpus, int ngpus, int clear)
 {
     list *options = read_data_cfg(datacfg);
@@ -524,6 +541,19 @@ void cronus2_testmain(char *datacfg, char *weightfile, float thresh, int validat
 			get_region_boxes7(l, 1, 1, thresh, probs, boxes, 0, 0);
 			if (nms) do_nms_sort7(boxes, probs, l.w*l.h*l.n, l.classes, nms);
 			draw_detections7(&im, l.w*l.h*l.n, thresh, boxes, probs, names, alphabet, l.classes);
+			if (DRAW3D) {
+				char input3d[256];
+				find_replace(input, "velo", "img", input3d);
+				image im3d = load_image_color(input3d, 0, 0);
+
+				draw_detections_3d(&im3d, l.w*l.h*l.n, thresh, boxes, probs, names, alphabet, l.classes);
+
+				find_replace(input3d, ".png", "(1)", input3d);
+				show_image(im3d, "Cronus Camera");
+				cvWaitKey(50);
+				save_image_png(im3d, input3d);
+				free_image(im3d);
+			}
 			//save_image(im, "predictions");
 			find_replace(input, ".jpg", "(1)", input);
 			find_replace(input, ".png", "(1)", input);
@@ -557,6 +587,19 @@ void cronus2_testmain(char *datacfg, char *weightfile, float thresh, int validat
 			get_region_boxes7(l, 1, 1, thresh, probs, boxes, 0, 0);
 			if (nms) do_nms_sort7(boxes, probs, l.w*l.h*l.n, l.classes, nms);
 			draw_detections7(&im, l.w*l.h*l.n, thresh, boxes, probs, names, alphabet, l.classes);
+			if (DRAW3D) {
+				char input3d[256];
+				find_replace(input, "velo", "img", input3d);
+				image im3d = load_image_color(input3d, 0, 0);
+
+				draw_detections_3d(&im3d, l.w*l.h*l.n, thresh, boxes, probs, names, alphabet, l.classes);
+
+				find_replace(input3d, ".png", "(1)", input3d);
+				show_image(im3d, "Cronus Camera");
+				cvWaitKey(50);
+				save_image_png(im3d, input3d);
+				free_image(im3d);
+			}
 			//save_image(im, "predictions");
 			find_replace(input, ".jpg", "(1).jpg", input);
 			find_replace(input, ".png", "(1).png", input);
@@ -876,6 +919,11 @@ void cronus2_recallmain(char* datacfg, char* weights, int validate_type)
 	}
 	set_batch_network(&net, 1);
 	srand(time(0));
+
+	float *iou2d, *iou3d;
+	int iou_pointer = 0;
+	iou2d = calloc(50000, sizeof(float));
+	iou3d = calloc(50000, sizeof(float));
 	
 	if(validate_type & VAL_TRAIN){
 		printf("validating on training set\n");
@@ -920,18 +968,27 @@ void cronus2_recallmain(char* datacfg, char* weights, int validate_type)
 			}
 			for (j = 0; j < num_labels; ++j) {
 				++total;
+				iou2d[iou_pointer] = 0;
+				iou3d[iou_pointer] = 0;
 				box3 t = { truth[j].x, truth[j].y, truth[j].w, truth[j].h, truth[j].rz, truth[j].z, truth[j].l};
 				float best_iou = 0;
+				float best_iou2 = 0;
 				for (k = 0; k < l.w*l.h*l.n; ++k) {
 					float iou = box_iou7(boxes[k], t);
 					if (probs[k][0] > thresh && iou > best_iou) {
 						best_iou = iou;
+					}
+					if (iou > best_iou2) {
+						iou2d[iou_pointer] = iou;
+						iou3d[iou_pointer] = iou*box_iou_h7(boxes[k], t);
+						best_iou2 = iou;
 					}
 				}
 				avg_iou += best_iou;
 				if (best_iou > iou_thresh) {
 					++correct;
 				}
+				iou_pointer++;
 			}
 			free(id);
 			free_image(orig);
@@ -981,24 +1038,36 @@ void cronus2_recallmain(char* datacfg, char* weights, int validate_type)
 			}
 			for (j = 0; j < num_labels; ++j) {
 				++total;
+				iou2d[iou_pointer] = 0;
+				iou3d[iou_pointer] = 0;
 				box3 t = { truth[j].x, truth[j].y, truth[j].w, truth[j].h, truth[j].rz, truth[j].z, truth[j].l};
 				float best_iou = 0;
+				float best_iou2 = 0;
 				for (k = 0; k < l.w*l.h*l.n; ++k) {
 					float iou = box_iou7(boxes[k], t);
 					if (probs[k][0] > thresh && iou > best_iou) {
 						best_iou = iou;
+					}
+					if (iou > best_iou2) {
+						iou2d[iou_pointer] = iou;
+						iou3d[iou_pointer] = iou*box_iou_h7(boxes[k], t);
+						best_iou2 = iou;
 					}
 				}
 				avg_iou += best_iou;
 				if (best_iou > iou_thresh) {
 					++correct;
 				}
+				iou_pointer++;
 			}
 			free(id);
 			free_image(orig);
 			//free_image(sized);
 		}
 		fprintf(stderr, "%5d correct out of %5d\tRPs/Img: %.2f\tIOU: %.2f%%\tRecall:%.2f%%\n", correct, total, (float)proposals / (i + 1), avg_iou * 100 / total, 100.*correct / total);
+	}
+	if (DRAW_CURVE) {
+		PlotCurve(iou2d, iou3d, iou_pointer);
 	}
 	//network net = parse_network_cfg(cfgfile);
 	/*if (weightfile) {

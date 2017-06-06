@@ -11,3 +11,6 @@ void cronus_recall5_online(network net, char* datacfg, int validate_type, float 
 void cronus_recall5(char* datacfg, char* weights, int validate_type);
 void cronus_test5(char *datacfg, char *weightfile, float thresh, int validate_type);
 void cronus_test5_single(char *datacfg, char *weightfile, float thresh, char* filename);
+
+#define DRAW_CURVE 1
+#define DRAW3D 0
