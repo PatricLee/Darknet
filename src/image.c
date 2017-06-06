@@ -476,6 +476,128 @@ void draw_detections7(image *im, int num, float thresh, box3 *boxes, float **pro
 		}
 	}
 }
+void draw_detections_3d(image *im, int n, float thresh, box3 *boxes, float **probs, char **names, image **alphabet, int classes) {
+	int i, j;
+	float p0[12] = { 721.5377,0.0,609.5593,44.85728,0.0,721.5377,172.854,0.2163791,0.0,0.0,1.0,0.002745884 };
+	float r0[9] = { 0.9999239,0.009833776,-0.007445048,-0.009869795,0.9999421,-0.004278459,0.007402527,0.004351614,0.9999631 };
+	float tr[16] = { 0.007533745,-0.9999714,-0.000616602,-0.004069766,0.01480249,0.0007280733,-0.9998902,-0.0763161,0.9998621,0.00752379,0.01480755,-0.2717806};
+	for (i = 0; i < n; i++) {
+		int class = max_index(probs[i], classes);
+		float prob = probs[i][class];
+		if (prob > thresh) {
+			float rgb[3];
+			rgb[0] = 1.0;
+			rgb[1] = 0.0;
+			rgb[2] = 0.0;
+			box3 b = boxes[i];
+			float x[8], y[8], z[8];
+			float u[8], v[8], bias[8];
+			y[0] = 15.2 - (cosf(b.rz)*(-b.w / 2) + sinf(b.rz)*(-b.h / 2) + b.x)*30.4;
+			x[0] = 30.4 - (-sinf(b.rz)*(-b.w / 2) + cosf(b.rz)*(-b.h / 2) + b.y)*30.4;
+			y[1] = 15.2 - (cosf(b.rz)*(b.w / 2) + sinf(b.rz)*(-b.h / 2) + b.x)*30.4;
+			x[1] = 30.4 - (-sinf(b.rz)*(b.w / 2) + cosf(b.rz)*(-b.h / 2) + b.y)*30.4;
+			y[5] = 15.2 - (cosf(b.rz)*(b.w / 2) + sinf(b.rz)*(b.h / 2) + b.x)*30.4;
+			x[5] = 30.4 - (-sinf(b.rz)*(b.w / 2) + cosf(b.rz)*(b.h / 2) + b.y)*30.4;
+			y[4] = 15.2 - (cosf(b.rz)*(-b.w / 2) + sinf(b.rz)*(b.h / 2) + b.x)*30.4;
+			x[4] = 30.4 - (-sinf(b.rz)*(-b.w / 2) + cosf(b.rz)*(b.h / 2) + b.y)*30.4;
+			x[2] = x[0];
+			y[2] = y[0];
+			x[3] = x[1];
+			y[3] = y[1];
+			x[6] = x[4];
+			y[6] = y[4];
+			x[7] = x[5];
+			y[7] = y[5];
+			z[0] = b.z*5.0 + b.l*5.0 / 2.0 - 4.0;
+			z[2] = b.z*5.0 - b.l*5.0 / 2.0 - 4.0;
+			z[1] = z[0];
+			z[4] = z[0];
+			z[5] = z[0];
+			z[3] = z[2];
+			z[6] = z[2];
+			z[7] = z[2];
+			
+			float mid[4], mid2[4];
+			for (j = 0; j < 8; j++) {
+				mid[0] = tr[0] * x[j] + tr[1] * y[j] + tr[2] * z[j] + tr[3];
+				mid[1] = tr[4] * x[j] + tr[5] * y[j] + tr[6] * z[j] + tr[7];
+				mid[2] = tr[8] * x[j] + tr[9] * y[j] + tr[10] * z[j] + tr[11];
+				mid[3] = 1;
+				//printf("point %d, %f %f %f %f\n", j + 1, mid[0], mid[1], mid[2], mid[3]);
+
+				mid2[0] = r0[0] * mid[0] + r0[1] * mid[1] + r0[2] * mid[2];
+				mid2[1] = r0[3] * mid[0] + r0[4] * mid[1] + r0[5] * mid[2];
+				mid2[2] = r0[6] * mid[0] + r0[7] * mid[1] + r0[8] * mid[2];
+				mid2[3] = 1;
+				//printf("\t%f %f %f %f\n", mid2[0], mid2[1], mid2[2], mid2[3]);
+
+				u[j] = p0[0] * mid2[0] + p0[1] * mid2[1] + p0[2] * mid2[2] + p0[3] * mid2[3];
+				v[j] = p0[4] * mid2[0] + p0[5] * mid2[1] + p0[6] * mid2[2] + p0[7] * mid2[3];
+				bias[j] = p0[8] * mid2[0] + p0[9] * mid2[1] + p0[10] * mid2[2] + p0[11] * mid2[3];
+				//printf("\t%f %f %f\n",  u[j], v[j], bias[j]);
+
+				u[j] = u[j] / bias[j];
+				v[j] = v[j] / bias[j];
+				//printf("\t\t%f %f\n", u[j], v[j]);
+				
+				/*u[j] = p0[0] * x[j] + p0[1] * y[j] + p0[2] * z[j] + p0[3];
+				v[j] = p0[4] * x[j] + p0[5] * y[j] + p0[6] * z[j] + p0[7];
+				bias[j] = p0[8] * x[j] + p0[9] * y[j] + p0[10] * z[j] + p0[11];
+				printf("\t%f %f %f\n\n",  u[j], v[j], bias[j]);
+
+				u[j] = u[j] / bias[j];
+				v[j] = v[j] / bias[j];
+				printf("\t\t%f %f\n", u[j], v[j]);*/
+			}
+
+			int xdraw[4], ydraw[4];
+			xdraw[0] = u[0];
+			xdraw[1] = u[1];
+			xdraw[2] = u[3];
+			xdraw[3] = u[2];
+			ydraw[0] = v[0];
+			ydraw[1] = v[1];
+			ydraw[2] = v[3];
+			ydraw[3] = v[2];
+			image pic = DrawLines_cv(*im, xdraw, ydraw, 4, 1, rgb[0], rgb[1], rgb[2]);
+			*im = copy_image(pic);
+			free_image(pic);
+			xdraw[0] = u[4];
+			xdraw[1] = u[5];
+			xdraw[2] = u[7];
+			xdraw[3] = u[6];
+			ydraw[0] = v[4];
+			ydraw[1] = v[5];
+			ydraw[2] = v[7];
+			ydraw[3] = v[6];
+			pic = DrawLines_cv(*im, xdraw, ydraw, 4, 1, rgb[0], rgb[1], rgb[2]);
+			*im = copy_image(pic);
+			free_image(pic);
+			xdraw[0] = u[1];
+			xdraw[1] = u[3];
+			xdraw[2] = u[7];
+			xdraw[3] = u[5];
+			ydraw[0] = v[1];
+			ydraw[1] = v[3];
+			ydraw[2] = v[7];
+			ydraw[3] = v[5];
+			pic = DrawLines_cv(*im, xdraw, ydraw, 4, 1, rgb[0], rgb[1], rgb[2]);
+			*im = copy_image(pic);
+			free_image(pic);
+			xdraw[0] = u[0];
+			xdraw[1] = u[2];
+			xdraw[2] = u[6];
+			xdraw[3] = u[4];
+			ydraw[0] = v[0];
+			ydraw[1] = v[2];
+			ydraw[2] = v[6];
+			ydraw[3] = v[4];
+			pic = DrawLines_cv(*im, xdraw, ydraw, 4, 1, rgb[0], rgb[1], rgb[2]);
+			*im = copy_image(pic);
+			free_image(pic);
+		}
+	}
+}
 
 void transpose_image(image im)
 {

@@ -23,6 +23,7 @@ void get_region_boxes(layer l, int w, int h, float thresh, float **probs, box *b
 void get_region_boxes5(layer l, int w, int h, float thresh, float **probs, box2 *boxes, int only_objectness, int *map);
 void get_region_boxes7(layer l, int w, int h, float thresh, float **probs, box3 *boxes, int only_objectness, int *map);
 void resize_region_layer(layer *l, int w, int h);
+float box_iou_h7(box3 a, box3 b);
 
 #ifdef GPU
 void forward_region_layer_gpu(const region_layer l, network_state state);

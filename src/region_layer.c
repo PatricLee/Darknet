@@ -1033,10 +1033,13 @@ void get_region_boxes7(layer l, int w, int h, float thresh, float **probs, box3 
                     }
                 }
             } else {
-                for(j = 0; j < l.classes; ++j){
+                /*for(j = 0; j < l.classes; ++j){
                     float prob = scale*predictions[class_index+j];
                     probs[index][j] = (prob > thresh) ? prob : 0;
-                }
+                }*/
+				float prob = scale*predictions[class_index];
+				probs[index][0] = (prob > thresh) ? prob : 0;
+				probs[index][1] = 0;
             }
             if(only_objectness){
                 probs[index][0] = scale;

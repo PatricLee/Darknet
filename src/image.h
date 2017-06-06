@@ -60,6 +60,7 @@ void rgbgr_image(image im);
 void constrain_image(image im);
 void composite_3d(char *f1, char *f2, char *out, int delta);
 int best_3d_shift_r(image a, image b, int min, int max);
+void draw_detections_3d(image *im, int n, float thresh, box3 *boxes, float **probs, char **names, image **alphabet, int classes);
 
 image grayscale_image(image im);
 image threshold_image(image im, float thresh);
