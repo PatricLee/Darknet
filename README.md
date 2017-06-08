@@ -166,7 +166,7 @@ If you knew about YOLO, or even better, you knew Darknet, then you know each com
 See how you can use either relative path or absolute path? It's totally a taste of your own. When training Cronus2, you should train main net first, then train sub net.
 
 #### 4.1.2 What should you do after training started?
-When the training started there's actually very little that you can do. For the first tens or hundreds of batches you should keep your eye on the loss, see if it actually converges. A well-designed network should converge real quick in the first dozen batches, while a pool-designed one wiggles or even does not converge and you might see NaN within 100 batches.
+When the training started there's actually very little that you can do. For the first tens or hundreds of batches you should keep your eye on the loss, see if it actually converges. A well-designed network should converge real quick in the first dozens of batches, while a pool-designed one wiggles or even does not converge and you might see NaN within 100 batches.
 
 The whole 50000 batches of training took about 18 hours in my case, but you could stop at any time you think it looks good enough.
 
